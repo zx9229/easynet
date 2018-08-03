@@ -5,20 +5,10 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"reflect"
 	"sync"
 	"unsafe"
 )
-
-/*
-//EasyConn omit
-type EasyConn interface {
-	RegCbConnected(handler CbConnected) bool
-	RegCbDisConnected(handler CbDisconnected) bool
-	RegCbMessage(handler CbMessage) bool
-	IsOnline() bool
-	Close()
-	Send(data []byte) error
-}*/
 
 var (
 	errOffline         = errors.New("offline")
@@ -37,7 +27,8 @@ type CbDisconnected func(eSock *EasySocket, err error)
 //CbMessage 收到消息的回调函数
 type CbMessage func(eSock *EasySocket, data []byte)
 
-type byte4type [4]byte
+type byte4type [4]byte //用于int32相关
+type byte3type [3]byte //用于checksum相关
 
 //EasySocket omit
 type EasySocket struct {
@@ -135,11 +126,13 @@ func (thls *EasySocket) Send(data []byte) error {
 	if err != nil {
 		thls.sock.Close()
 		thls.sock = nil
+		//等待recv线程执行onDisconnect回调
 		return err
 	}
 	if num != len(data2) {
 		thls.sock.Close()
 		thls.sock = nil
+		//等待recv线程执行onDisconnect回调
 		return errSendHalfMessage
 	}
 	return nil
@@ -155,7 +148,7 @@ func (thls *EasySocket) doRecv(conn net.Conn, act func(eSock *EasySocket)) {
 		thls.onConnected(thls, thls.isAccepted)
 	}
 
-	doReXyz := func(err error) {
+	doWhenRecvErr := func(err error) {
 		conn.Close()
 		thls.mutex.Lock()
 		thls.sock = nil
@@ -167,45 +160,45 @@ func (thls *EasySocket) doRecv(conn net.Conn, act func(eSock *EasySocket)) {
 			act(thls)
 		}
 	}
-
-	var err error
-	var num int
-	var cnt int
-	byte4 := byte4type{}
+	var err error            //错误
+	var num int              //本次读取了多少字节
+	var cnt int              //本轮读取了多少字节
+	var size int             //传输消息有多少字节
+	var data []byte          //传输消息的内容(四字节的长度+内容+三字节的校验和)
+	var checksumValue string //传输消息的校验和
+	var byte4 byte4type      //四字节的长度,存储区
 	for {
 		cnt = 0
 		for cnt < 4 {
 			if num, err = conn.Read(byte4[cnt:]); err == nil {
 				cnt += num
 			} else {
-				doReXyz(err)
+				doWhenRecvErr(err)
 				return
 			}
 		}
-		size := *(*int32)(unsafe.Pointer(&byte4))
+		size = int(*(*int32)(unsafe.Pointer(&byte4)) + 3)
 		if 10240 < size {
-			doReXyz(errMessageIsTooBig)
+			doWhenRecvErr(errMessageIsTooBig)
 			return
 		}
-		data := make([]byte, size+3) //数据+3位的checksum
-		for i, b := range byte4 {
-			data[i] = b
-		}
-		cnt = 4
-		for cnt < int(size+3) {
+		data = make([]byte, size)
+		*(*byte4type)(unsafe.Pointer(&data[0])) = byte4
+		for cnt < size {
 			if num, err = conn.Read(data[cnt:]); err == nil {
 				cnt += num
 			} else {
-				doReXyz(err)
+				doWhenRecvErr(err)
 				return
 			}
 		}
-		csum := checksum(data[:size])
-		if string(data[size:]) != csum {
-			doReXyz(errChecksumIsWrong)
+		checksumValue = checksum(data[:size-3])
+		//fmt.Println("checksumValue", checksumValue, string(data[size-3:]))
+		if *(*byte3type)(unsafe.Pointer(&data[size-3])) != *(*byte3type)(unsafe.Pointer((*reflect.StringHeader)(unsafe.Pointer(&checksumValue)).Data)) {
+			doWhenRecvErr(errChecksumIsWrong)
 			return
 		}
-		thls.onMessage(thls, data[4:size])
+		thls.onMessage(thls, data[4:size-3])
 	}
 }
 
@@ -214,16 +207,18 @@ func checksum(byteSlice []byte) string {
 	for _, x := range byteSlice {
 		sum += x
 	}
+	//fmt.Println(reflect.StringHeader{}, reflect.SliceHeader{})//string和slice的内存布局.
 	return fmt.Sprintf("%03v", sum)
 }
 
 func tmpGetSlice(data []byte) []byte {
+	//传输消息的内容(四字节的长度+内容+三字节的校验和)
 	size := int32(len(data))
 	size += 4
 	b4 := (*byte4type)(unsafe.Pointer(&size))
 	data2 := append((*b4)[:], data...)
 	sum := checksum(data2)
-	data2 = append(data2, []byte(sum)...)
+	data2 = append(data2, sum[:]...)
 	return data2
 }
 
