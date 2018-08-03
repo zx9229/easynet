@@ -9,6 +9,7 @@ import (
 	"unsafe"
 )
 
+/*
 //EasyConn omit
 type EasyConn interface {
 	RegCbConnected(handler CbConnected) bool
@@ -17,12 +18,12 @@ type EasyConn interface {
 	IsOnline() bool
 	Close()
 	Send(data []byte) error
-}
+}*/
 
 var (
-	errOffline         = errors.New("Offline")
+	errOffline         = errors.New("offline")
 	errSendHalfMessage = errors.New("send half message")
-	errMessageIsTooBig = errors.New("message packet is too big")
+	errMessageIsTooBig = errors.New("message is too big")
 	errChecksumIsWrong = errors.New("checksum is wrong")
 	errPlaceholder     = errors.New("placeholder")
 )
@@ -36,8 +37,6 @@ type CbDisconnected func(eSock *EasySocket, err error)
 //CbMessage 收到消息的回调函数
 type CbMessage func(eSock *EasySocket, data []byte)
 
-type extraAction func(eSock *EasySocket)
-
 type byte4type [4]byte
 
 //EasySocket omit
@@ -45,8 +44,9 @@ type EasySocket struct {
 	onConnected    CbConnected    //连接成功的回调
 	onDisconnected CbDisconnected //连接断线的回调
 	onMessage      CbMessage      //收到消息的回调
-	sock           net.Conn
 	mutex          sync.Mutex
+	isAccepted     bool
+	sock           net.Conn
 }
 
 func newEasySocket(conn net.Conn) *EasySocket {
@@ -55,22 +55,53 @@ func newEasySocket(conn net.Conn) *EasySocket {
 	return curData
 }
 
+func (thls *EasySocket) setIsAccepted(value bool) {
+	thls.isAccepted = value
+}
+
 //RegCbConnected omit
 func (thls *EasySocket) RegCbConnected(handler CbConnected) bool {
+	if thls.isAccepted {
+		return false
+	}
 	thls.onConnected = handler
 	return true
 }
 
 //RegCbDisConnected omit
 func (thls *EasySocket) RegCbDisConnected(handler CbDisconnected) bool {
+	if thls.isAccepted {
+		return false
+	}
 	thls.onDisconnected = handler
 	return true
 }
 
 //RegCbMessage omit
 func (thls *EasySocket) RegCbMessage(handler CbMessage) bool {
+	if thls.isAccepted {
+		return false
+	}
 	thls.onMessage = handler
 	return true
+}
+
+//LocalAddr omit
+func (thls *EasySocket) LocalAddr() net.Addr {
+	curSock := thls.sock
+	if curSock != nil {
+		return curSock.LocalAddr()
+	}
+	return nil
+}
+
+//RemoteAddr omit
+func (thls *EasySocket) RemoteAddr() net.Addr {
+	curSock := thls.sock
+	if curSock != nil {
+		return curSock.RemoteAddr()
+	}
+	return nil
 }
 
 //IsOnline omit
@@ -84,6 +115,8 @@ func (thls *EasySocket) Close() {
 	defer thls.mutex.Unlock()
 	if thls.sock != nil {
 		thls.sock.Close()
+		thls.sock = nil
+		//等待recv线程执行onDisconnect回调
 	}
 }
 
@@ -113,13 +146,13 @@ func (thls *EasySocket) Send(data []byte) error {
 }
 
 //doRecv omit
-func (thls *EasySocket) doRecv(conn net.Conn, isAccepted bool, act extraAction) {
+func (thls *EasySocket) doRecv(conn net.Conn, act func(eSock *EasySocket)) {
 	thls.mutex.Lock()
 	thls.sock = conn
 	thls.mutex.Unlock()
 
 	if thls.onConnected != nil {
-		thls.onConnected(thls, isAccepted)
+		thls.onConnected(thls, thls.isAccepted)
 	}
 
 	doReXyz := func(err error) {
@@ -196,7 +229,7 @@ func tmpGetSlice(data []byte) []byte {
 
 //EgOnConnected omit
 func EgOnConnected(eSock *EasySocket, isAccepted bool) {
-	log.Printf("OnCon[v], %p, isAccepted=%v", eSock, isAccepted)
+	log.Printf("OnCon[v], %p, A=%v, L=%v, R=%v", eSock, isAccepted, eSock.LocalAddr(), eSock.RemoteAddr())
 }
 
 //EgOnDisconnected omit

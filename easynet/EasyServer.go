@@ -53,8 +53,9 @@ func (thls *EasyServer) Run(tcpAddr string) error {
 		eSock.RegCbConnected(thls.onConnected)
 		eSock.RegCbDisConnected(thls.onDisconnected)
 		eSock.RegCbMessage(thls.onMessage)
+		eSock.setIsAccepted(true)
 		thls.cache.Add(eSock)
-		eSock.doRecv(conn, true, thls.actionWhenDis)
+		go eSock.doRecv(conn, thls.actionWhenDis)
 	}
 }
 

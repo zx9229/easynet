@@ -38,7 +38,7 @@ func (thls *EasyClient) reConnect() error {
 		if conn, err = net.Dial("tcp", thls.tcpAddr); err != nil {
 			time.Sleep(time.Second * 5)
 		} else {
-			go thls.doRecv(conn, false, thls.actionWhenDis)
+			go thls.doRecv(conn, thls.actionWhenDis)
 		}
 		if !thls.doReconnect {
 			break
