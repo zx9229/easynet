@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/zx9229/EasyTest/easynet"
+	"github.com/zx9229/easynet/easynet"
 )
 
 func main() {

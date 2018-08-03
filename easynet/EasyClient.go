@@ -47,7 +47,7 @@ func (thls *EasyClient) reConnect() error {
 	return err
 }
 
-func (thls *EasyClient) actionWhenDis(eSock *EasySocket, err error) {
+func (thls *EasyClient) actionWhenDis(eSock *EasySocket) {
 	if thls.doReconnect {
 		go thls.reConnect()
 	}

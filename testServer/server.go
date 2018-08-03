@@ -1,6 +1,6 @@
 package main
 
-import "github.com/zx9229/EasyTest/easynet"
+import "github.com/zx9229/easynet/easynet"
 
 func main() {
 	tcpAddr := "localhost:54321"

@@ -58,9 +58,6 @@ func (thls *EasyServer) Run(tcpAddr string) error {
 	}
 }
 
-func (thls *EasyServer) actionWhenDis(eSock *EasySocket, err error) {
+func (thls *EasyServer) actionWhenDis(eSock *EasySocket) {
 	thls.cache.Del(eSock)
-	if thls.onDisconnected != nil {
-		thls.onDisconnected(eSock, err)
-	}
 }

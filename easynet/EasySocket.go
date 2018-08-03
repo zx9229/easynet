@@ -36,7 +36,7 @@ type CbDisconnected func(eSock *EasySocket, err error)
 //CbMessage 收到消息的回调函数
 type CbMessage func(eSock *EasySocket, data []byte)
 
-type extraAction func(eSock *EasySocket, err error)
+type extraAction func(eSock *EasySocket)
 
 type byte4type [4]byte
 
@@ -89,6 +89,9 @@ func (thls *EasySocket) Close() {
 
 //Send omit
 func (thls *EasySocket) Send(data []byte) error {
+	if data == nil || len(data) == 0 {
+		return nil
+	}
 	thls.mutex.Lock()
 	defer thls.mutex.Unlock()
 	if thls.sock == nil {
@@ -128,7 +131,7 @@ func (thls *EasySocket) doRecv(conn net.Conn, isAccepted bool, act extraAction) 
 			thls.onDisconnected(thls, err)
 		}
 		if act != nil {
-			act(thls, err)
+			act(thls)
 		}
 	}
 
