@@ -113,7 +113,14 @@ func (thls *EasySocket) Close() {
 
 //Send omit
 func (thls *EasySocket) Send(data []byte) error {
-	if data == nil || len(data) == 0 {
+	return thls.innerSend(data, true)
+}
+
+func (thls *EasySocket) innerSend(data []byte, disableEmpty bool) error {
+	if data == nil {
+		return nil
+	}
+	if len(data) == 0 && disableEmpty {
 		return nil
 	}
 	thls.mutex.Lock()
@@ -197,6 +204,9 @@ func (thls *EasySocket) doRecv(conn net.Conn, act func(eSock *EasySocket)) {
 		if *(*byte3type)(unsafe.Pointer(&data[size-3])) != *(*byte3type)(unsafe.Pointer((*reflect.StringHeader)(unsafe.Pointer(&checksumValue)).Data)) {
 			doWhenRecvErr(errChecksumIsWrong)
 			return
+		}
+		if size == 7 {
+			continue
 		}
 		thls.onMessage(thls, data[4:size-3])
 	}

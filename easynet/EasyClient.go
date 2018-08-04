@@ -39,12 +39,20 @@ func (thls *EasyClient) reConnect() error {
 			time.Sleep(time.Second * 5)
 		} else {
 			go thls.doRecv(conn, thls.actionWhenDis)
+			go thls.innerSendHeartbeat()
 		}
 		if !thls.doReconnect {
 			break
 		}
 	}
 	return err
+}
+
+func (thls *EasyClient) innerSendHeartbeat() {
+	emptySlice := make([]byte, 0)
+	for thls.innerSend(emptySlice, false) == nil {
+		time.Sleep(time.Second * 60 * 2)
+	}
 }
 
 func (thls *EasyClient) actionWhenDis(eSock *EasySocket) {
