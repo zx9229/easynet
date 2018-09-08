@@ -5,21 +5,21 @@ import (
 	"time"
 )
 
-//EasyClient3 omit
-type EasyClient3 struct {
-	EasySocket3
+//EasyClientImpl omit
+type EasyClientImpl struct {
+	EasySocketImpl
 	doReconnect bool
 	tcpAddr     string
 }
 
-//NewEasyClient3 omit
-func NewEasyClient3() EasyClient {
-	curData := new(EasyClient3)
+//NewEasyClientImpl omit
+func NewEasyClientImpl() EasyClient {
+	curData := new(EasyClientImpl)
 	return curData
 }
 
 //Connect omit
-func (thls *EasyClient3) Connect(tcpAddr string, doReconnect bool) error {
+func (thls *EasyClientImpl) Connect(tcpAddr string, doReconnect bool) error {
 	var err error
 	thls.tcpAddr = tcpAddr
 	thls.doReconnect = doReconnect
@@ -31,7 +31,7 @@ func (thls *EasyClient3) Connect(tcpAddr string, doReconnect bool) error {
 	return err
 }
 
-func (thls *EasyClient3) reConnect() error {
+func (thls *EasyClientImpl) reConnect() error {
 	var conn net.Conn
 	err := errPlaceholder
 	for err != nil {
@@ -48,14 +48,14 @@ func (thls *EasyClient3) reConnect() error {
 	return err
 }
 
-func (thls *EasyClient3) innerSendHeartbeat() {
+func (thls *EasyClientImpl) innerSendHeartbeat() {
 	emptySlice := make([]byte, 0)
 	for thls.innerSend(emptySlice, false) == nil {
 		time.Sleep(time.Second * 60 * 2)
 	}
 }
 
-func (thls *EasyClient3) actionWhenDis(eSock *EasySocket3) {
+func (thls *EasyClientImpl) actionWhenDis(eSock *EasySocketImpl) {
 	if thls.doReconnect {
 		go thls.reConnect()
 	}

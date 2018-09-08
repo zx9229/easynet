@@ -21,8 +21,8 @@ var (
 type byte4type [4]byte //用于int32相关
 type byte3type [3]byte //用于checksum相关
 
-//EasySocket3 omit
-type EasySocket3 struct {
+//EasySocketImpl omit
+type EasySocketImpl struct {
 	onConnected    EasyConnected    //连接成功的回调
 	onDisconnected EasyDisconnected //连接断线的回调
 	onMessage      EasyMessage      //收到消息的回调
@@ -31,18 +31,18 @@ type EasySocket3 struct {
 	sock           net.Conn
 }
 
-func newEasySocket3(conn net.Conn) *EasySocket3 {
-	curData := new(EasySocket3)
+func newEasySocketImpl(conn net.Conn) *EasySocketImpl {
+	curData := new(EasySocketImpl)
 	curData.sock = conn
 	return curData
 }
 
-func (thls *EasySocket3) setIsAccepted(value bool) {
+func (thls *EasySocketImpl) setIsAccepted(value bool) {
 	thls.isAccepted = value
 }
 
 //RegEasyConnected omit
-func (thls *EasySocket3) RegEasyConnected(handler EasyConnected) bool {
+func (thls *EasySocketImpl) RegEasyConnected(handler EasyConnected) bool {
 	if thls.isAccepted {
 		return false
 	}
@@ -51,7 +51,7 @@ func (thls *EasySocket3) RegEasyConnected(handler EasyConnected) bool {
 }
 
 //RegEasyDisConnected omit
-func (thls *EasySocket3) RegEasyDisConnected(handler EasyDisconnected) bool {
+func (thls *EasySocketImpl) RegEasyDisConnected(handler EasyDisconnected) bool {
 	if thls.isAccepted {
 		return false
 	}
@@ -60,7 +60,7 @@ func (thls *EasySocket3) RegEasyDisConnected(handler EasyDisconnected) bool {
 }
 
 //RegEasyMessage omit
-func (thls *EasySocket3) RegEasyMessage(handler EasyMessage) bool {
+func (thls *EasySocketImpl) RegEasyMessage(handler EasyMessage) bool {
 	if thls.isAccepted {
 		return false
 	}
@@ -69,7 +69,7 @@ func (thls *EasySocket3) RegEasyMessage(handler EasyMessage) bool {
 }
 
 //LocalAddr omit
-func (thls *EasySocket3) LocalAddr() net.Addr {
+func (thls *EasySocketImpl) LocalAddr() net.Addr {
 	curSock := thls.sock
 	if curSock != nil {
 		return curSock.LocalAddr()
@@ -78,7 +78,7 @@ func (thls *EasySocket3) LocalAddr() net.Addr {
 }
 
 //RemoteAddr omit
-func (thls *EasySocket3) RemoteAddr() net.Addr {
+func (thls *EasySocketImpl) RemoteAddr() net.Addr {
 	curSock := thls.sock
 	if curSock != nil {
 		return curSock.RemoteAddr()
@@ -87,12 +87,12 @@ func (thls *EasySocket3) RemoteAddr() net.Addr {
 }
 
 //IsOnline omit
-func (thls *EasySocket3) IsOnline() bool {
+func (thls *EasySocketImpl) IsOnline() bool {
 	return (thls.sock != nil)
 }
 
 //Close omit
-func (thls *EasySocket3) Close() {
+func (thls *EasySocketImpl) Close() {
 	thls.mutex.Lock()
 	defer thls.mutex.Unlock()
 	if thls.sock != nil {
@@ -103,11 +103,11 @@ func (thls *EasySocket3) Close() {
 }
 
 //Send omit
-func (thls *EasySocket3) Send(data []byte) error {
+func (thls *EasySocketImpl) Send(data []byte) error {
 	return thls.innerSend(data, true)
 }
 
-func (thls *EasySocket3) innerSend(data []byte, disableEmpty bool) error {
+func (thls *EasySocketImpl) innerSend(data []byte, disableEmpty bool) error {
 	if data == nil {
 		return nil
 	}
@@ -137,7 +137,7 @@ func (thls *EasySocket3) innerSend(data []byte, disableEmpty bool) error {
 }
 
 //doRecv omit
-func (thls *EasySocket3) doRecv(conn net.Conn, act func(eSock *EasySocket3)) {
+func (thls *EasySocketImpl) doRecv(conn net.Conn, act func(eSock *EasySocketImpl)) {
 	thls.mutex.Lock()
 	thls.sock = conn
 	thls.mutex.Unlock()

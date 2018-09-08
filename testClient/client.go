@@ -8,7 +8,7 @@ import (
 
 func main() {
 	tcpAddr := "localhost:54321"
-	eClient := easynet.NewEasyClient3()
+	eClient := easynet.NewEasyClientImpl()
 	eClient.RegEasyConnected(easynet.EgOnConnected)
 	eClient.RegEasyDisConnected(easynet.EgOnDisconnected)
 	eClient.RegEasyMessage(easynet.EgOnMessage)
