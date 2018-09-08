@@ -8,10 +8,10 @@ import (
 
 func main() {
 	tcpAddr := "localhost:54321"
-	eClient := easynet.NewEasyClient()
-	eClient.RegCbConnected(easynet.EgOnConnected)
-	eClient.RegCbDisConnected(easynet.EgOnDisconnected)
-	eClient.RegCbMessage(easynet.EgOnMessage)
+	eClient := easynet.NewEasyClient3()
+	eClient.RegEasyConnected(easynet.EgOnConnected)
+	eClient.RegEasyDisConnected(easynet.EgOnDisconnected)
+	eClient.RegEasyMessage(easynet.EgOnMessage)
 	eClient.Connect(tcpAddr, true)
 	for {
 		var line string

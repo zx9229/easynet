@@ -4,42 +4,42 @@ import (
 	"net"
 )
 
-//EasyServer omit
-type EasyServer struct {
-	onConnected    CbConnected    //连接成功的回调
-	onDisconnected CbDisconnected //连接断线的回调
-	onMessage      CbMessage      //收到消息的回调
+//EasyServer3 omit
+type EasyServer3 struct {
+	onConnected    EasyConnected    //连接成功的回调
+	onDisconnected EasyDisconnected //连接断线的回调
+	onMessage      EasyMessage      //收到消息的回调
 	listener       net.Listener
 	cache          *safeSet
 }
 
-//NewEasyServer omit
-func NewEasyServer() *EasyServer {
-	curData := new(EasyServer)
+//NewEasyServer3 omit
+func NewEasyServer3() *EasyServer3 {
+	curData := new(EasyServer3)
 	curData.cache = newSafeSet()
 	return curData
 }
 
-//RegCbConnected omit
-func (thls *EasyServer) RegCbConnected(handler CbConnected) bool {
+//RegEasyConnected omit
+func (thls *EasyServer3) RegEasyConnected(handler EasyConnected) bool {
 	thls.onConnected = handler
 	return true
 }
 
-//RegCbDisConnected omit
-func (thls *EasyServer) RegCbDisConnected(handler CbDisconnected) bool {
+//RegEasyDisConnected omit
+func (thls *EasyServer3) RegEasyDisConnected(handler EasyDisconnected) bool {
 	thls.onDisconnected = handler
 	return true
 }
 
-//RegCbMessage omit
-func (thls *EasyServer) RegCbMessage(handler CbMessage) bool {
+//RegEasyMessage omit
+func (thls *EasyServer3) RegEasyMessage(handler EasyMessage) bool {
 	thls.onMessage = handler
 	return true
 }
 
 //Run omit
-func (thls *EasyServer) Run(tcpAddr string) error {
+func (thls *EasyServer3) Run(tcpAddr string) error {
 	var err error
 	if thls.listener, err = net.Listen("tcp", tcpAddr); err != nil {
 		return err
@@ -49,16 +49,16 @@ func (thls *EasyServer) Run(tcpAddr string) error {
 		if conn, err = thls.listener.Accept(); err != nil {
 			return err
 		}
-		eSock := newEasySocket(conn)
-		eSock.RegCbConnected(thls.onConnected)
-		eSock.RegCbDisConnected(thls.onDisconnected)
-		eSock.RegCbMessage(thls.onMessage)
+		eSock := newEasySocket3(conn)
+		eSock.RegEasyConnected(thls.onConnected)
+		eSock.RegEasyDisConnected(thls.onDisconnected)
+		eSock.RegEasyMessage(thls.onMessage)
 		eSock.setIsAccepted(true)
 		thls.cache.Add(eSock)
 		go eSock.doRecv(conn, thls.actionWhenDis)
 	}
 }
 
-func (thls *EasyServer) actionWhenDis(eSock *EasySocket) {
+func (thls *EasyServer3) actionWhenDis(eSock *EasySocket3) {
 	thls.cache.Del(eSock)
 }
