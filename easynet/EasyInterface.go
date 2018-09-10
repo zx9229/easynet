@@ -16,6 +16,8 @@ type EasySocket interface {
 	RegEasyConnected(handler EasyConnected) bool
 	RegEasyDisConnected(handler EasyDisconnected) bool
 	RegEasyMessage(handler EasyMessage) bool
+	SetData(v interface{})
+	GetData() interface{}
 	LocalAddr() net.Addr
 	RemoteAddr() net.Addr
 	IsOnline() bool

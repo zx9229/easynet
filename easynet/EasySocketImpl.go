@@ -26,6 +26,7 @@ type EasySocketImpl struct {
 	onConnected    EasyConnected    //连接成功的回调
 	onDisconnected EasyDisconnected //连接断线的回调
 	onMessage      EasyMessage      //收到消息的回调
+	data           interface{}      //设置的附加信息
 	mutex          sync.Mutex
 	isAccepted     bool
 	sock           net.Conn
@@ -66,6 +67,16 @@ func (thls *EasySocketImpl) RegEasyMessage(handler EasyMessage) bool {
 	}
 	thls.onMessage = handler
 	return true
+}
+
+//SetData omit
+func (thls *EasySocketImpl) SetData(v interface{}) {
+	thls.data = v
+}
+
+//GetData omit
+func (thls *EasySocketImpl) GetData() interface{} {
+	return thls.data
 }
 
 //LocalAddr omit
