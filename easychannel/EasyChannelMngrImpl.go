@@ -1,27 +1,46 @@
 package easychannel
 
 import (
+	"sync"
+	"sync/atomic"
 	"unsafe"
 
 	"github.com/zx9229/easynet/easynet"
 )
 
+type operationData struct {
+	isClient    bool  //客户端类别的标志(client类别的channel,主动创建的channel)
+	id          int64 //
+	isCloseRecv bool  //关闭接收(关闭接收chan)
+	isCloseBoth bool  //关闭双向(移除这个sockChan)
+}
+
+type mapWithLock struct {
+	sync.RWMutex
+	M map[int64]*EasyChannelImpl
+}
+
 //EasyChannelMngrImpl omit
 type EasyChannelMngrImpl struct {
-	sendChan    chan []byte
-	eSock       easynet.EasySocket
-	channelIdx  int64
-	srvChannel  map[int64]*EasyChannelImpl //server类别的channel,被动创建的channel
-	cliChannel  map[int64]*EasyChannelImpl //client类别的channel,主动创建的channel
-	cbConnected EasyConnected
+	sendToSock   chan []byte
+	recvFromSock chan []byte
+	opChan       chan *operationData
+	eSock        easynet.EasySocket
+	srvChannel   *mapWithLock // map[int64]*EasyChannelImpl //server类别的channel,被动创建的channel
+	cliChannel   *mapWithLock // map[int64]*EasyChannelImpl //client类别的channel,主动创建的channel
+	cliChanIdx   int64
+	cbConnected  EasyConnected
 }
 
 func newEasyChannelMngrImpl(eSock easynet.EasySocket) EasyChannelManager {
 	curData := new(EasyChannelMngrImpl)
-	curData.sendChan = make(chan []byte, 128)
+	curData.sendToSock = make(chan []byte, 128)
+	curData.recvFromSock = make(chan []byte, 128)
+	curData.opChan = make(chan *operationData, 2)
 	curData.eSock = eSock
-	curData.channelIdx = 9
-	curData.cliChannel = make(map[int64]*EasyChannelImpl)
+	curData.cliChanIdx = 0
+	curData.srvChannel = &mapWithLock{M: make(map[int64]*EasyChannelImpl)}
+	curData.cliChannel = &mapWithLock{M: make(map[int64]*EasyChannelImpl)}
 	curData.cbConnected = nil
 	return curData
 }
@@ -37,69 +56,101 @@ func (thls *EasyChannelMngrImpl) RegEasyConnected(handler EasyConnected) bool {
 
 //CreateEasyChannel omit
 func (thls *EasyChannelMngrImpl) CreateEasyChannel() (eChannel EasyChannel, err error) {
-	thls.channelIdx++
-	curSockChan := newEasyChannelImpl(thls.channelIdx, thls.sendChan)
-	thls.cliChannel[thls.channelIdx] = curSockChan
+	cliChannelIdx := atomic.AddInt64(&thls.cliChanIdx, 1)
+	curSockChan := newEasyChannelImpl(cliChannelIdx, thls.opChan, thls.sendToSock, true)
+	thls.cliChannel.Lock()
+	thls.cliChannel.M[cliChannelIdx] = curSockChan
+	thls.cliChannel.Unlock()
 	eChannel = curSockChan
 	return
 }
 
+func (thls *EasyChannelMngrImpl) doOneGoroutine() {
+	var data []byte
+	var opData *operationData
+	select {
+	case data = <-thls.recvFromSock:
+		thls.doRecvData(data)
+	case opData = <-thls.opChan:
+		thls.doOperate(opData)
+	}
+}
+
+func (thls *EasyChannelMngrImpl) doOperate(opData *operationData) {
+	var mapSafeData *mapWithLock
+	if opData.isClient {
+		mapSafeData = thls.cliChannel
+	} else {
+		mapSafeData = thls.srvChannel
+	}
+
+	if opData.isCloseRecv {
+		mapSafeData.RLock()
+		close(mapSafeData.M[opData.id].recvChan)
+		mapSafeData.M[opData.id].recvChan = nil
+		mapSafeData.RUnlock()
+	}
+	if opData.isCloseBoth {
+		mapSafeData.Lock()
+		//TODO:其他清理操作
+		delete(mapSafeData.M, opData.id)
+		mapSafeData.Unlock()
+	}
+}
+
 func (thls *EasyChannelMngrImpl) doRecvData(data []byte) {
-	//发过来的数据中,第一个字符,表征"这个消息包是做什么用的"
-	switch ChannelStatus(data[0]) {
-	case ChannelStatus_NA:
-		panic("")
-	case ChannelStatus_Open:
-		thls.doChannelStatusOpen(data)
-	case ChannelStatus_Working:
-		thls.doChannelStatusWorking(data)
-	case ChannelStatus_CloseSend:
-	case ChannelStatus_CloseRecv:
-	case ChannelStatus_CloseBoth:
-	case ChannelStatus_NotFound:
-	case ChannelStatus_Recreate:
-	default:
-		panic("")
+	//byte(ChannelStatus)|int64(channelIndex)|messageData
+	if len(data) < 9 {
+		panic("logic_error")
 	}
-}
-
-func (thls *EasyChannelMngrImpl) doChannelStatusWorking(data []byte) {
-	channelIdx := *(*int64)(unsafe.Pointer(&data[1]))
-	var isOk bool
-	var eSockChan EasyChannel
-	if eSockChan, isOk = thls.srvChannel[channelIdx]; !isOk {
-		thls.sendChan <- generatePackage(ChannelStatus_NotFound, channelIdx, nil)
-		return
-	}
-	if eSockChan.Status()&ChannelStatus_CloseRecv == ChannelStatus_CloseRecv {
-		//这一端关闭了接收通道,按照逻辑,已经发送了"关闭对端的发送通道"消息,只是这个消息还没有被对端处理,
-		//这里不再重复发送对应的消息,以规避冗余消息
-		//thls.sendChan <- generatePackage(ChannelStatus_CloseSend, channelIdx, nil)
-		return
+	var mapSafeData *mapWithLock
+	curStatus := *(*ChannelStatus)(unsafe.Pointer(&data[0]))
+	isClient := curStatus&ChannelStatus_IsClient == ChannelStatus_IsClient
+	if isClient {
+		mapSafeData = thls.srvChannel       //对端是客户端,本端就是服务端.
+		curStatus -= ChannelStatus_IsClient //TODO:不知对错.
+	} else {
+		mapSafeData = thls.cliChannel
 	}
 
-}
-
-func (thls *EasyChannelMngrImpl) doChannelStatusOpen(data []byte) {
-	channelIdx := *(*int64)(unsafe.Pointer(&data[1]))
-	if _, ok := thls.srvChannel[channelIdx]; ok {
-		thls.sendChan <- generatePackage(ChannelStatus_Recreate, channelIdx, nil)
-		return
+	channelIndex := *(*int64)(unsafe.Pointer(&data[1]))
+	mapSafeData.Lock()
+	eSockChan, isOk := mapSafeData.M[channelIndex]
+	mapSafeData.Unlock()
+	if !isOk {
+		if isClient && *(*ChannelStatus)(unsafe.Pointer(&data[0])) == ChannelStatus_Open {
+			eSockChan = newEasyChannelImpl(channelIndex, thls.opChan, thls.sendToSock, false)
+			mapSafeData.Lock()
+			mapSafeData.M[channelIndex] = eSockChan
+			mapSafeData.Unlock()
+			if thls.cbConnected != nil {
+				thls.cbConnected(eSockChan)
+			}
+		} else {
+			thls.sendToSock <- generatePackageOpErr(ChannelStatus_NotFound, channelIndex)
+		}
 	}
-	eSockChan := newEasyChannelImpl(channelIdx, thls.sendChan)
-	thls.srvChannel[channelIdx] = eSockChan
-	if thls.cbConnected != nil {
-		thls.cbConnected(eSockChan)
+	if eSockChan != nil {
+		tmpChan := eSockChan.recvChan
+		if tmpChan != nil {
+			tmpChan <- data
+		}
 	}
 }
 
 func generatePackage(status ChannelStatus, id int64, data []byte) []byte {
 	byteSlice := make([]byte, 0)
 	byteSlice = append(byteSlice, byte(status))
-	//byteSlice = append(byteSlice, )
 	byteSlice = append(byteSlice, (*(*[8]byte)(unsafe.Pointer(&id)))[:]...)
 	if data != nil {
 		byteSlice = append(byteSlice, data...)
 	}
 	return byteSlice
+}
+
+func generatePackageOpErr(status ChannelStatus, id int64) []byte {
+	if status&ChannelStatus_OpErr != ChannelStatus_OpErr {
+		panic("logic_error")
+	}
+	return generatePackage(status, id, nil)
 }
