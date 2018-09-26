@@ -5,8 +5,7 @@ import "net"
 //EasySession omit
 type EasySession interface {
 	ID() int64
-	IsClient() bool
-	Status() byte
+	IsAccepted() bool
 	Close(closeSend bool, closeRecv bool)
 	Send(data []byte) error
 	Recv() (data []byte, err error)

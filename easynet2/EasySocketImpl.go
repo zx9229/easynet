@@ -17,6 +17,7 @@ var (
 )
 
 type byte4type [4]byte //用于int32相关
+type byte8type [8]byte //用于int64相关
 
 //EasySocketImpl omit
 type EasySocketImpl struct {
@@ -27,6 +28,7 @@ type EasySocketImpl struct {
 	mutex          sync.Mutex
 	isAccepted     bool
 	sock           net.Conn
+	sessManager    *easySessionManager
 }
 
 func newEasySocketImpl(conn net.Conn) *EasySocketImpl {
@@ -144,6 +146,29 @@ func (thls *EasySocketImpl) innerSend(data []byte, disableEmpty bool) error {
 	return nil
 }
 
+func (thls *EasySocketImpl) innerSend2(data []byte, sessionID int64, isAccepted bool, operateData byte) error {
+	thls.mutex.Lock()
+	defer thls.mutex.Unlock()
+	if thls.sock == nil {
+		return errOffline
+	}
+	data2 := zxTmpInfo2Data(data, sessionID, isAccepted, operateData)
+	num, err := thls.sock.Write(data2)
+	if err != nil {
+		thls.sock.Close()
+		thls.sock = nil
+		//等待recv线程执行onDisconnect回调
+		return err
+	}
+	if num != len(data2) {
+		thls.sock.Close()
+		thls.sock = nil
+		//等待recv线程执行onDisconnect回调
+		return errSendHalfMessage
+	}
+	return nil
+}
+
 //doRecv omit
 func (thls *EasySocketImpl) doRecv(conn net.Conn, act func(eSock *EasySocketImpl)) {
 	thls.mutex.Lock()
@@ -166,12 +191,13 @@ func (thls *EasySocketImpl) doRecv(conn net.Conn, act func(eSock *EasySocketImpl
 			act(thls)
 		}
 	}
-	var err error       //错误
-	var num int         //本次读取了多少字节
-	var cnt int         //本轮读取了多少字节
-	var size int        //传输消息有多少字节
-	var data []byte     //传输消息的内容(四字节的长度+内容)
-	var byte4 byte4type //四字节的长度,存储区
+	var err error         //错误
+	var num int           //本次读取了多少字节
+	var cnt int           //本轮读取了多少字节
+	var size int          //传输消息有多少字节
+	var data []byte       //传输消息的内容(四字节的长度+内容)
+	var byte4 byte4type   //四字节的长度,存储区
+	var byte4Ex byte4type //四字节的长度,存储区
 	for {
 		cnt = 0
 		for cnt < 4 {
@@ -182,8 +208,10 @@ func (thls *EasySocketImpl) doRecv(conn net.Conn, act func(eSock *EasySocketImpl
 				return
 			}
 		}
-		size = int(*(*int32)(unsafe.Pointer(&byte4)))
-		if 10240 < size {
+		byte4Ex = byte4
+		byte4Ex[0] &= flag_Mask
+		size = int(*(*int32)(unsafe.Pointer(&byte4Ex)))
+		if 10240000 < size {
 			doWhenRecvErr(errMessageIsTooBig)
 			return
 		}
@@ -200,7 +228,15 @@ func (thls *EasySocketImpl) doRecv(conn net.Conn, act func(eSock *EasySocketImpl
 				return
 			}
 		}
-		thls.onMessage(thls, nil, data[4:])
+
+		if true {
+			var sess *easySessionImpl
+			msgData, sessionID, peerIsAccepted, operateData := zxTmpData2Info(data)
+			if sessionID != 0 {
+				sess = thls.sessManager.operateSession(sessionID, peerIsAccepted, operateData)
+			}
+			thls.onMessage(thls, sess, msgData)
+		}
 	}
 }
 
@@ -215,6 +251,39 @@ func tmpGetSlice(data []byte) []byte {
 	size += 4
 	b4 := (*byte4type)(unsafe.Pointer(&size))
 	return append((*b4)[:], data...)
+}
+
+func zxTmpInfo2Data(data []byte, sessionID int64, isAccepted bool, operateData byte) []byte {
+	txDataBody := make([]byte, 0)
+	txDataSize := int32(len(data))
+	if sessionID != 0 {
+		txDataSize = 4 + 1 + 8 + txDataSize
+		txDataBody = append(txDataBody, (*byte4type)(unsafe.Pointer(&txDataSize))[:]...)
+		txDataBody = append(txDataBody, operateData)
+		txDataBody = append(txDataBody, (*byte8type)(unsafe.Pointer(&sessionID))[:]...)
+		txDataBody = append(txDataBody, data...)
+		if isAccepted {
+			txDataBody[0] = txDataBody[0] | flag_IsSession | flag_IsAccepted
+		} else {
+			txDataBody[0] = txDataBody[0] | flag_IsSession
+		}
+	} else {
+		txDataSize = 4 + txDataSize
+		txDataBody = append(txDataBody, (*byte4type)(unsafe.Pointer(&txDataSize))[:]...)
+		txDataBody = append(txDataBody, data...)
+	}
+	return txDataBody
+}
+
+func zxTmpData2Info(txData []byte) (data []byte, sessionID int64, isAccepted bool, operateData byte) {
+	if txData[0]&flag_IsSession == flag_IsSession {
+		operateData = txData[4]
+		sessionID = *(*int64)(unsafe.Pointer(&txData[5]))
+		isAccepted = txData[0]&flag_IsAccepted == flag_IsAccepted
+	} else {
+		data = txData[4:]
+	}
+	return
 }
 
 //EgOnConnected omit
