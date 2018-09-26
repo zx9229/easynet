@@ -242,7 +242,7 @@ func (thls *EasySocketImpl) doRecv(conn net.Conn, act func(eSock *EasySocketImpl
 
 //CreateSession omit
 func (thls *EasySocketImpl) CreateSession() EasySession {
-	return nil
+	return thls.sessManager.CreateSession()
 }
 
 func tmpGetSlice(data []byte) []byte {

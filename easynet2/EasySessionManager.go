@@ -34,6 +34,8 @@ func (thls *easySessionManager) CreateSession() *easySessionImpl {
 	thls.cliSession.Lock()
 	thls.cliSession.M[cliChannelIdx] = sess
 	thls.cliSession.Unlock()
+	sess.sock.innerSend2(nil, sess.id, sess.isAccepted, action_Open)
+	thls.sock.onConnected(thls.sock, thls.sock.isAccepted, sess, sess.isAccepted)
 	return sess
 }
 
