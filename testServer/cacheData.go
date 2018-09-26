@@ -38,11 +38,11 @@ func jiaoHu() {
 //EgOnConnected omit
 func EgOnConnected(eSock easynet2.EasySocket, isAccepted bool, eSess easynet2.EasySession, sessAccepted bool) {
 	log.Printf("OnCon[v], %p|%p A=%v|%v, L=%v, R=%v", eSock, eSess, isAccepted, sessAccepted, eSock.LocalAddr(), eSock.RemoteAddr())
-	sockName := fmt.Sprintf("%v", eSock)
+	sockName := fmt.Sprintf("%p", eSock)
 	if eSock == nil {
 		sockName = "0x0"
 	}
-	sessName := fmt.Sprintf("%v", eSess)
+	sessName := fmt.Sprintf("%p", eSess)
 	if eSess == nil {
 		sessName = "0x0"
 	}
@@ -52,11 +52,11 @@ func EgOnConnected(eSock easynet2.EasySocket, isAccepted bool, eSess easynet2.Ea
 //EgOnDisconnected omit
 func EgOnDisconnected(eSock easynet2.EasySocket, eSess easynet2.EasySession, err error, byDisconnected bool) {
 	log.Printf("OnDis[x], %p|%p, err=%v", eSock, eSess, err)
-	sockName := fmt.Sprintf("%v", eSock)
+	sockName := fmt.Sprintf("%p", eSock)
 	if eSock == nil {
 		sockName = "0x0"
 	}
-	sessName := fmt.Sprintf("%v", eSess)
+	sessName := fmt.Sprintf("%p", eSess)
 	if eSess == nil {
 		sessName = "0x0"
 	}
