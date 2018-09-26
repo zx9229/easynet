@@ -1,12 +1,16 @@
 package main
 
-import "github.com/zx9229/easynet/easynet"
+import (
+	"github.com/zx9229/easynet/easynet2"
+)
 
 func main() {
 	tcpAddr := "localhost:54321"
-	eServer := easynet.NewEasyServerImpl()
-	eServer.RegEasyConnected(easynet.EgOnConnected)
-	eServer.RegEasyDisConnected(easynet.EgOnDisconnected)
-	eServer.RegEasyMessage(easynet.EgOnMessage)
-	eServer.Run(tcpAddr)
+	eServer := easynet2.NewEasyServerImpl()
+	eServer.RegEasyConnected(EgOnConnected)
+	eServer.RegEasyDisConnected(EgOnDisconnected)
+	eServer.RegEasyMessage(EgOnMessage)
+	go eServer.Run(tcpAddr)
+
+	jiaoHu()
 }

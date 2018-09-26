@@ -1,21 +1,15 @@
 package main
 
 import (
-	"fmt"
-
-	"github.com/zx9229/easynet/easynet"
+	"github.com/zx9229/easynet/easynet2"
 )
 
 func main() {
 	tcpAddr := "localhost:54321"
-	eClient := easynet.NewEasyClientImpl()
-	eClient.RegEasyConnected(easynet.EgOnConnected)
-	eClient.RegEasyDisConnected(easynet.EgOnDisconnected)
-	eClient.RegEasyMessage(easynet.EgOnMessage)
+	eClient := easynet2.NewEasyClientImpl()
+	eClient.RegEasyConnected(EgOnConnected)
+	eClient.RegEasyDisConnected(EgOnDisconnected)
+	eClient.RegEasyMessage(EgOnMessage)
 	eClient.Connect(tcpAddr, true)
-	for {
-		var line string
-		fmt.Scanln(&line)
-		eClient.Send([]byte(line))
-	}
+	jiaoHu()
 }
