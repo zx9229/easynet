@@ -33,7 +33,7 @@ func newEasySessionImpl(eSock *EasySocketImpl, idx int64, isAccepted bool) *easy
 	curData.sock = eSock
 	curData.id = idx
 	curData.isAccepted = isAccepted
-	curData.isOpen = false
+	curData.isOpen = true
 	curData.isCloseSend = false
 	curData.isCloseRecv = false
 	return curData

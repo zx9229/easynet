@@ -155,6 +155,7 @@ func (thls *EasySocketImpl) innerSend2(data []byte, sessionID int64, isAccepted 
 	}
 	data2 := zxTmpInfo2Data(data, sessionID, isAccepted, operateData)
 	num, err := thls.sock.Write(data2)
+	NetLog.INFO.Printf("(sock.Write)sessionID=%v,isAccepted=%v,operateData=%v,data=%v", sessionID, isAccepted, operateData, string(data))
 	if err != nil {
 		thls.sock.Close()
 		thls.sock = nil
@@ -177,7 +178,8 @@ func (thls *EasySocketImpl) doRecv(conn net.Conn, act func(eSock *EasySocketImpl
 	thls.mutex.Unlock()
 
 	if thls.onConnected != nil {
-		thls.onConnected(thls, thls.isAccepted, nil, false)
+		var nilEasySession *easySessionImpl
+		thls.onConnected(thls, thls.isAccepted, nilEasySession, false)
 	}
 
 	doWhenRecvErr := func(err error) {
@@ -233,6 +235,7 @@ func (thls *EasySocketImpl) doRecv(conn net.Conn, act func(eSock *EasySocketImpl
 		if true {
 			var sess *easySessionImpl
 			msgData, sessionID, peerIsAccepted, operateData := zxTmpData2Info(data)
+			NetLog.INFO.Printf("(Read)sessionID=%v,IsAccepted=%v,operateData=%v,data=%v", sessionID, peerIsAccepted, operateData, string(msgData))
 			if sessionID != 0 {
 				sess = thls.sessManager.operateSession(sessionID, peerIsAccepted, operateData)
 			}
@@ -281,6 +284,7 @@ func zxTmpData2Info(txData []byte) (data []byte, sessionID int64, isAccepted boo
 		operateData = txData[4]
 		sessionID = *(*int64)(unsafe.Pointer(&txData[5]))
 		isAccepted = txData[0]&flag_IsAccepted == flag_IsAccepted
+		data = txData[13:]
 	} else {
 		data = txData[4:]
 	}
