@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/zx9229/easynet/easynet2"
 )
@@ -18,19 +20,22 @@ func jiaoHu() {
 		fmt.Scanln(&line)
 		fields := strings.Split(line, ",")
 		if len(fields) != 4 {
-			log.Printf("fields=%v", fields)
+			log.Printf("unknown_command=[%v]", line)
 			continue
 		}
 		sockNm := strings.Trim(fields[0], " \t\r\n")
 		sessNm := strings.Trim(fields[1], " \t\r\n")
 		action := strings.Trim(fields[2], " \t\r\n")
 		mesage := strings.Trim(fields[3], " \t\r\n")
-		if action == "open" {
+		switch action {
+		case "open":
 			globalData.openSession(sockNm)
-		} else if action == "close" {
-			globalData.closeSession(sockNm, sessNm)
-		} else {
-			globalData.doAction(sockNm, sessNm, action, mesage, nil, nil)
+		case "close":
+			globalData.closeSessionOrSocket(sockNm, sessNm)
+		case "send":
+			globalData.sendData(sockNm, sessNm, action, mesage)
+		default:
+			log.Printf("unknown_command=[%v]", line)
 		}
 	}
 }
@@ -46,7 +51,7 @@ func EgOnConnected(eSock easynet2.EasySocket, isAccepted bool, eSess easynet2.Ea
 	if eSess == nil {
 		sessName = "0x0"
 	}
-	globalData.doAction(sockName, sessName, "insert", "", eSock, eSess)
+	globalData.insertData(sockName, sessName, eSock, eSess)
 }
 
 //EgOnDisconnected omit
@@ -60,7 +65,7 @@ func EgOnDisconnected(eSock easynet2.EasySocket, eSess easynet2.EasySession, err
 	if eSess == nil {
 		sessName = "0x0"
 	}
-	globalData.doAction(sockName, sessName, "delete", "", eSock, eSess)
+	globalData.deleteData(sockName, sessName, eSock, eSess)
 }
 
 //EgOnMessage omit
@@ -88,65 +93,112 @@ func (thls *cacheData) openSession(sockName string) easynet2.EasySession {
 	var isOk bool
 	var curSockInfo *sockInfo
 	if curSockInfo, isOk = thls.sockCache[sockName]; !isOk {
-		log.Printf("find not socket info [%v]", sockName)
+		log.Printf("cache does not exist socket = [%v]", sockName)
 		return nil
 	}
-	return curSockInfo.sock.CreateSession()
+	return curSockInfo.sock.CreateSession() //让回调函数更新cache
 }
 
-func (thls *cacheData) closeSession(sockName, sessName string) {
+func (thls *cacheData) closeSessionOrSocket(sockName, sessName string) {
 	isSession := (sessName != "0x0")
 	var isOk bool
 	var curSockInfo *sockInfo
 	if curSockInfo, isOk = thls.sockCache[sockName]; !isOk {
-		log.Printf("find not socket info [%v]", sockName)
+		log.Printf("cache does not exist socket = [%v]", sockName)
 		return
 	}
 	if !isSession {
-		curSockInfo.sock.Close()
+		curSockInfo.sock.Close() //让回调函数更新cache
 		return
 	}
 	var curSessData easynet2.EasySession
 	if curSessData, isOk = curSockInfo.M[sessName]; !isOk {
-		log.Printf("find not session info [%v]", sockName)
+		log.Printf("cache does not exist session = [%v]", sessName)
 		return
 	}
-	curSessData.Close(true, true)
+	curSessData.Close(true, true) //让回调函数更新cache
 }
 
-func (thls *cacheData) doAction(sockName, sessName, action, msg string, eSock easynet2.EasySocket, eSess easynet2.EasySession) {
+func (thls *cacheData) insertData(sockName, sessName string, eSock easynet2.EasySocket, eSess easynet2.EasySession) {
 	isSession := (sessName != "0x0")
 	var isOk bool
 	var curSockInfo *sockInfo
-	if curSockInfo, isOk = thls.sockCache[sockName]; !isOk && isSession {
-		log.Printf("find not socket info [%v]", sockName)
-		return
-	}
-	var curSessData easynet2.EasySession
-	if isSession {
-		if curSessData, isOk = curSockInfo.M[sessName]; !isOk && (action != "insert") {
-			log.Printf("find not session info [%v]", sessName)
-			return
-		}
-	}
-	switch action {
-	case "insert":
-		if isSession {
-			curSockInfo.M[sessName] = eSess
+	if curSockInfo, isOk = thls.sockCache[sockName]; !isOk { //找不到socket
+		if isSession { //更新socket的缓存
+			message := fmt.Sprintf("insert session (%v|%v) and no   socket = %p", sockName, sessName, curSockInfo.sock)
+			log.Println(message)
+			panic(message)
 		} else {
 			thls.sockCache[sockName] = &sockInfo{name: sockName, sock: eSock, M: make(map[string]easynet2.EasySession)}
 		}
-	case "delete":
-		if isSession {
-			delete(curSockInfo.M, sessName)
+	} else { //找到了socket
+		if !isSession { //插入socket
+			message := fmt.Sprintf("insert socket (%v|%v) and exist socket = %p", sockName, sessName, curSockInfo.sock)
+			log.Println(message)
+			panic(message)
 		} else {
-			delete(thls.sockCache, sockName)
-		}
-	case "send":
-		if isSession {
-			curSessData.Send([]byte(msg))
-		} else {
-			curSockInfo.sock.Send([]byte(msg))
+			curSockInfo.M[sessName] = eSess
 		}
 	}
+}
+
+func (thls *cacheData) deleteData(sockName, sessName string, eSock easynet2.EasySocket, eSess easynet2.EasySession) {
+	isSession := (sessName != "0x0")
+	var isOk bool
+	var curSockInfo *sockInfo
+	if curSockInfo, isOk = thls.sockCache[sockName]; !isOk { //找不到socket
+		message := fmt.Sprintf("delete (%v|%v) and no socket = %p", sockName, sessName, curSockInfo.sock)
+		log.Println(message)
+		panic(message)
+	}
+	if isSession {
+		if _, isOk = curSockInfo.M[sessName]; !isOk {
+			message := fmt.Sprintf("delete (%v|%v) and no session = %v", sockName, sessName, sessName)
+			log.Println(message)
+			panic(message)
+		}
+		delete(curSockInfo.M, sessName)
+	} else {
+		delete(thls.sockCache, sockName)
+	}
+}
+
+func (thls *cacheData) sendData(sockName, sessName, action, msg string) {
+	isSession := (sessName != "0x0")
+	var isOk bool
+	var curSockInfo *sockInfo
+	var err error
+	if curSockInfo, isOk = thls.sockCache[sockName]; !isOk { //找不到socket
+		log.Println("send to (%v|%v) and no socket = %v", sockName, sessName, sockName)
+		return
+	}
+	if isSession {
+		var curSession easynet2.EasySession
+		if curSession, isOk = curSockInfo.M[sessName]; !isOk {
+			log.Println("send to (%v|%v) and no session = %v", sockName, sessName, sessName)
+			return
+		}
+		if err = curSession.Send([]byte(msg)); err != nil {
+			log.Println("send to (%v|%v) and err = %v", sockName, sessName, err)
+		}
+	} else {
+		if err = curSockInfo.sock.Send([]byte(msg)); err != nil {
+			log.Println("send to (%v|%v) and err = %v", sockName, sessName, err)
+		}
+	}
+}
+
+func initLog(isClient bool) {
+	logFilename := time.Now().Format("20060102_150405")
+	if isClient {
+		logFilename = "log_client_" + logFilename + ".log"
+	} else {
+		logFilename = "log_server_" + logFilename + ".log"
+	}
+	logFile, err := os.OpenFile(logFilename, os.O_RDONLY|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		panic(err)
+	}
+	easynet2.NetLog.SetOutput(logFile)
+	easynet2.NetLog.INFO.Println("init log finish.")
 }
