@@ -5,6 +5,7 @@ import (
 )
 
 func main() {
+	initLog(true)
 	tcpAddr := "localhost:54321"
 	eClient := easynet2.NewEasyClientImpl()
 	eClient.RegEasyConnected(EgOnConnected)
