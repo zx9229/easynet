@@ -15,6 +15,7 @@ type EasyClientImpl struct {
 //NewEasyClientImpl omit
 func NewEasyClientImpl() EasyClient {
 	curData := new(EasyClientImpl)
+	curData.EasySocketImpl.sessManager = newEasySessionManager(&curData.EasySocketImpl)
 	return curData
 }
 

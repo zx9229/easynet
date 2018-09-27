@@ -34,6 +34,7 @@ type EasySocketImpl struct {
 func newEasySocketImpl(conn net.Conn) *EasySocketImpl {
 	curData := new(EasySocketImpl)
 	curData.sock = conn
+	curData.sessManager = newEasySessionManager(curData)
 	return curData
 }
 
