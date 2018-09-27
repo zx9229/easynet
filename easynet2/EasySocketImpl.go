@@ -252,11 +252,11 @@ func (thls *EasySocketImpl) doRecv(conn net.Conn, act func(eSock *EasySocketImpl
 			var sess *easySessionImpl
 			msgData, sessionID, peerIsAccepted, operateData := zxTmpData2Info(data)
 			NetLog.INFO.Printf("(Read)sessionID=%v,IsAccepted=%v,operateData=%v,data=%v", sessionID, peerIsAccepted, operateData, string(msgData))
-			if len(msgData) == 0 {
-				continue
-			}
 			if sessionID != 0 {
 				sess = thls.sessManager.operateSession(sessionID, peerIsAccepted, operateData)
+			}
+			if len(msgData) == 0 {
+				continue
 			}
 			thls.onMessage(thls, sess, msgData)
 		}
