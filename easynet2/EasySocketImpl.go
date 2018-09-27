@@ -187,8 +187,24 @@ func (thls *EasySocketImpl) doRecv(conn net.Conn, act func(eSock *EasySocketImpl
 		thls.mutex.Lock()
 		thls.sock = nil
 		thls.mutex.Unlock()
+		if true {
+			thls.sessManager.cliSession.Lock()
+			for k, v := range thls.sessManager.cliSession.M {
+				thls.onDisconnected(thls, v, err, true)
+				delete(thls.sessManager.cliSession.M, k)
+			}
+			thls.sessManager.cliSession.Unlock()
+			//
+			thls.sessManager.srvSession.Lock()
+			for k, v := range thls.sessManager.srvSession.M {
+				thls.onDisconnected(thls, v, err, true)
+				delete(thls.sessManager.srvSession.M, k)
+			}
+			thls.sessManager.srvSession.Unlock()
+		}
 		if thls.onDisconnected != nil {
-			thls.onDisconnected(thls, nil, err, true)
+			var nilSession *easySessionImpl
+			thls.onDisconnected(thls, nilSession, err, true)
 		}
 		if act != nil {
 			act(thls)
@@ -236,6 +252,9 @@ func (thls *EasySocketImpl) doRecv(conn net.Conn, act func(eSock *EasySocketImpl
 			var sess *easySessionImpl
 			msgData, sessionID, peerIsAccepted, operateData := zxTmpData2Info(data)
 			NetLog.INFO.Printf("(Read)sessionID=%v,IsAccepted=%v,operateData=%v,data=%v", sessionID, peerIsAccepted, operateData, string(msgData))
+			if len(msgData) == 0 {
+				continue
+			}
 			if sessionID != 0 {
 				sess = thls.sessManager.operateSession(sessionID, peerIsAccepted, operateData)
 			}

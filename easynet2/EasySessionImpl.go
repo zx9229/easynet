@@ -71,6 +71,7 @@ func (thls *easySessionImpl) Close(closeSend bool, closeRecv bool) {
 	}
 	if thls.isCloseRecv && thls.isCloseSend {
 		thls.sock.sessManager.deleteSession(thls.id, thls.isAccepted)
+		thls.sock.onDisconnected(thls.sock, thls, nil, false)
 	}
 }
 

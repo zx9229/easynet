@@ -18,7 +18,7 @@ func jiaoHu() {
 		//socket,session,action,data
 		var line string
 		fmt.Scanln(&line)
-		fields := strings.Split(line, ",")
+		fields := strings.Split(line, "|")
 		if len(fields) != 4 {
 			log.Printf("unknown_command=[%v]", line)
 			continue
