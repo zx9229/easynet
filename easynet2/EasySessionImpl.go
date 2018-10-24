@@ -1,5 +1,9 @@
 package easynet2
 
+import (
+	"sync"
+)
+
 var (
 	action_NA          byte = 0
 	action_Open        byte = (1 << 0) //2^0=1
@@ -20,12 +24,14 @@ var (
 
 //EasySessionImpl omit
 type easySessionImpl struct {
+	mutex       sync.Mutex
 	sock        *EasySocketImpl
 	id          int64
 	isAccepted  bool
 	isOpen      bool
 	isCloseSend bool
 	isCloseRecv bool
+	dataQue     chan []byte
 }
 
 func newEasySessionImpl(eSock *EasySocketImpl, idx int64, isAccepted bool) *easySessionImpl {
@@ -36,6 +42,7 @@ func newEasySessionImpl(eSock *EasySocketImpl, idx int64, isAccepted bool) *easy
 	curData.isOpen = true
 	curData.isCloseSend = false
 	curData.isCloseRecv = false
+	curData.dataQue = make(chan []byte)
 	return curData
 }
 
@@ -51,6 +58,9 @@ func (thls *easySessionImpl) IsAccepted() bool {
 
 //Close omit
 func (thls *easySessionImpl) Close(closeSend bool, closeRecv bool) {
+	thls.mutex.Lock()
+	defer thls.mutex.Unlock()
+
 	if !thls.isOpen {
 		return
 	}
@@ -86,6 +96,10 @@ func (thls *easySessionImpl) Send(data []byte) error {
 
 //Recv omit
 func (thls *easySessionImpl) Recv() (data []byte, err error) {
+	var isOk bool
+	if data, isOk = <-thls.dataQue; !isOk {
+		err = errPlaceholder
+	}
 	panic("")
 	return
 }
